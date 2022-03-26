@@ -1,0 +1,77 @@
+# Write a play to deploy apache and git
+- name: configure apache on Amazon linux instances
+  hosts: ubuntu-clients
+  tasks:
+    - name: Upgrade all packages #yum update -y
+      yum:
+        name: '*'
+        state: latest
+    - name: Install the latest version of Apache #yum install httpd
+      yum:
+        name: httpd
+        state: latest
+    - name: Start service httpd, if not started #systemctl start httpd
+      ansible.builtin.service:
+        name: httpd
+        state: started
+    - name: Enable service httpd, and not touch the state #systemctl start httpd
+      ansible.builtin.service:
+        name: httpd
+        enabled: yes
+    - name: Copy index file from controller to the clients
+      ansible.builtin.copy:
+        src: /home/ec2-user/index.html # on the controller
+        dest: /var/www/html/ # Clients
+
+- name: Install Git
+  hosts: ubuntu-clients
+  gather_facts: false
+  become: true
+  vars:
+    version: 2.19.1
+    prefix: /usr/local
+    temp_dir: /tmp
+    binary_dir: "{{ temp_dir }}/git-{{ version }}"
+    url: "https://www.kernel.org/pub/software/scm/git/git-{{ version }}.tar.gz"
+  tasks:
+    - name: Install yum package
+      yum:
+        name:
+          - curl-devel
+          - expat-devel
+          - gettext-devel
+          - openssl-devel
+          - zlib-devel
+          - wget
+          - gcc
+          - cpan
+
+    - name: Get git binary
+      unarchive:
+        src: "{{ url }}"
+        dest: "{{ temp_dir }}"
+        remote_src: yes
+      changed_when: false
+      register: result
+
+    - name: Make all git binary
+      make:
+        chdir: "{{ binary_dir }}"
+        target: all
+        params:
+          prefix: "{{ prefix }}"
+      changed_when: false
+
+    - name: Make install git binary
+      make:
+        chdir: "{{ binary_dir }}"
+        target: install
+        params:
+          prefix: "{{ prefix }}"
+      changed_when: false
+
+    - name: Remove file
+      file:
+        path: "{{ binary_dir }}"
+        state: absent
+      changed_when: false
